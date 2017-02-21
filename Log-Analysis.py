@@ -42,7 +42,7 @@ def main():
                 wordcount[word] += 1
         header = "Virtual Ubuntu SSH Attempts"
         for k,v in wordcount.items():
-            if (v <= 5):
+            if (v >= 5):
                 duplicate = iptables(str(k))
                 if duplicate == False:
                     os.system("iptables -A INPUT -s " + str(k) + " -j DROP")
