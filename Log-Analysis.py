@@ -111,5 +111,4 @@ if __name__ == "__main__":
     if euid != 0:
         print "[ERROR]You should have root permissions to run this program ! "
     else:
-        print Web_IP
         main()
