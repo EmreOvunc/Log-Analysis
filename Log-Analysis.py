@@ -1,15 +1,16 @@
 #!/usr/bin/python
 import os
+from json import load
+from urllib2 import urlopen
 
 Apc_Path = '/var/log/apache2/'
 Log_Path = '/var/log/auth.log'
 Dsk_Path = '/tmp/'
 wordcount = {}
-## Web_IP will be your web server external IP address.
-# Change it
-Web_IP = "8.8.8.8"
 tmp_Logs = {}
 euid = os.geteuid()
+Web_IP=load(urlopen('http://jsonip.com'))['ip']
+
 
 def mail_func(k,v,header,flag):
     receiver_mail = " info@emreovunc.com"
@@ -110,4 +111,5 @@ if __name__ == "__main__":
     if euid != 0:
         print "[ERROR]You should have root permissions to run this program ! "
     else:
+        print Web_IP
         main()
