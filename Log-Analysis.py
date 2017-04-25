@@ -1,114 +1,125 @@
-#!/usr/bin/python
+#!/usr/bin/python3
+# EmreOvunc info@emreovunc.com
+
 import os
-from json import load
-from urllib2 import urlopen
 
-Apc_Path = '/var/log/apache2/'
-Log_Path = '/var/log/auth.log'
-Dsk_Path = '/tmp/'
-wordcount = {}
-tmp_Logs = {}
-euid = os.geteuid()
-Web_IP=load(urlopen('http://jsonip.com'))['ip']
+# General Paths & Variables
+webIP = 'YOUR WEB SERVER IP'
+logPath = '/var/log/'
 
+# Auth Statics
+auth = 'auth'
+logAuth = logPath + 'auth.log'
+tmpAuth = '/tmp/tmp_authList.txt'
+grepAuth = " grep 'sshd.*fail' | grep -ho 'rhost=\w*.\w*.\w*.\w*'"
+cutAuth = " cut -c 7-"
+blacklist_Auth = 'blacklist_Auth.txt'
 
-def mail_func(k,v,header,flag):
-    receiver_mail = " info@emreovunc.com"
-    mail_data = " | mail -s '" + header + "' " + receiver_mail
-    if flag == "ssh":
-        content = "echo 'Someone is trying brute-force ! [" + str(k) + "] tried " + str(v) +" times and BLOCKED :)'"
-    elif flag == "apache":
-        content = "echo 'Someone is trying web attacks ! [" + str(k) + "] tried in "+ str(v) +" and BLOCKED :)'"
-    else:
-        content = "echo 'Bad Message! :('"
-    mail_fail = content + mail_data
-    os.system(str(mail_fail))
+# Apache Statics
+apache = 'apache'
+apachePath = logPath + 'apache2/'
+accessLog = apachePath + 'access.log'
+blacklist_Apache = 'blacklist_Apache.txt'
+grepApache1 = " grep -E 'scan|script|prompt|bash|admin|root|command|manager|login|sql|db|database|myadmin|mysql|administrator|pma|PMA|setup'"
+grepApache2 = " grep -Eo '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}'"
+tmpApache = "/tmp/tmp_apacheList.txt"
+
+# Mail Statics
+apache_header = 'Virtual Ubuntu WEB Attacks'
+auth_header = 'Virtual Ubuntu SSH Attempts'
+receiver_mail = " info@emreovunc.com"
+
+def create_black_lists():
+    if not os.path.exists(blacklist_Apache):
+        os.system('touch ' + blacklist_Apache)
+    if not os.path.exists(blacklist_Auth):
+        os.system('touch ' + blacklist_Auth)
+
+def add_iptables(IP):
+    os.system('iptables -A INPUT -s ' + IP + " -j DROP")
+
+def add_black_lists(typeLog, IP):
+    if typeLog == auth:
+        auth_blacklist = open(blacklist_Auth, 'a')
+        auth_blacklist.write("\n"+str(IP))
+        auth_blacklist.close()
+
+    elif typeLog == apache:
+        apache_blacklist = open(blacklist_Apache, 'a')
+        apache_blacklist.write("\n"+str(IP))
+        apache_blacklist.close()
+
+def send_mail(typeLog, IP, count):
+    if typeLog == auth:
+        mail_data = " | mail -s '" + auth_header + "' " + receiver_mail
+        content = "echo 'Someone is trying brute-force ! [" + IP + "] tried " + str(count) + " times and BLOCKED :)'"
+        mail_fail = str(content + mail_data)
+        os.system(mail_fail)
+
+    elif typeLog == apache:
+        mail_data = " | mail -s '" + apache_header + "' " + receiver_mail
+        content = "echo 'Someone is trying web attacks ! [" + IP + "] tried and BLOCKED :)'"
+        mail_fail = str(content + mail_data)
+        os.system(mail_fail)
+
+def eliminate_duplicates(typeLog, file_name):
+    wordcount = {}
+    for word in file_name.read().split():
+        if word not in wordcount:
+            wordcount[word] = 1
+        else:
+            wordcount[word] += 1
+
+    if typeLog == auth:
+        for k, v in wordcount.items():
+            if v >= 5:
+                if not check_same_ip(auth, str(k)):
+                    add_black_lists(auth, str(k))
+                    add_iptables(str(k))
+                    send_mail(auth, str(k), v)
+
+    elif typeLog == apache:
+        for k, v in wordcount.items():
+            if str(k) != webIP:
+                if not check_same_ip(apache, str(k)):
+                    add_black_lists(apache, str(k))
+                    add_iptables(str(k))
+                    send_mail(apache, str(k), 0)
+
+def check_same_ip(typeLog, IP):
+    if typeLog == auth:
+        auth_blacklist = open(blacklist_Auth, 'r+')
+        for IPs in auth_blacklist:
+            if IP in IPs:
+                return True
+        auth_blacklist.close()
+        return False
+
+    elif typeLog == apache:
+        apache_blacklist = open(blacklist_Apache, 'r+')
+        for IPs in apache_blacklist:
+            if IP in IPs:
+                return True
+        apache_blacklist.close()
+        return False
+
+def apache_log():
+    os.system("cat " + accessLog + "|" + grepApache1 + "|" + grepApache2 + " > " + tmpApache)
+    tmpApache_File = open(tmpApache, 'r+')
+    eliminate_duplicates(apache, tmpApache_File)
+    tmpApache_File.close()
+
+def auth_log():
+    os.system("cat " + logAuth + "|" + grepAuth + "|" + cutAuth + " > " + tmpAuth)
+    tmpAuth_File = open(tmpAuth, 'r+')
+    eliminate_duplicates(auth, tmpAuth_File)
+    tmpAuth_File.close()
 
 def main():
-    if os.path.exists(Log_Path):
-        if os.path.isdir(Dsk_Path):
-            if os.path.exists(Dsk_Path+"SSH_IP_BlackList.txt"):
-                os.system("rm " + Dsk_Path + "SSH_IP_BlackList.txt" )
-        else:
-            print "[ERROR] Your tmp path is not found !\n Please give your path manually."
-    else:
-        print "[ERROR] Your 'auth.log' is not found !\n Please give your log file manually."
-    os.system("cat " + Log_Path + " | grep 'sshd.*fail' | grep -ho 'rhost=\w*.\w*.\w*.\w*' | cut -c 7- > " + Dsk_Path + "SSH_IP_BlackList.txt")
-    file = open( Dsk_Path + "SSH_IP_BlackList.txt", "r+")
-    for word in file.read().split():
-        if word not in wordcount:
-            wordcount[word] = 1
-        else:
-            wordcount[word] += 1
-    header = "Virtual Ubuntu SSH Attempts"
-    for k,v in wordcount.items():
-        if (v <= 5):
-            duplicate = iptables(str(k))
-            if duplicate == False:
-                os.system("iptables -A INPUT -s " + str(k) + " -j DROP")
-                mail_func(k,v,header,"ssh")
-    os.system("rm -rf " + Dsk_Path + "SSH_IP_BlackList.txt")
-    try:
-        os.system("iptables-save")
-    except:
-        pass
-    os.system("rm -rf " + Dsk_Path + "iptables.txt")
-    apache2_log()
-
-def apache2_log():
-    if os.path.exists(Apc_Path+"access.log"):
-        if not os.path.isdir(Dsk_Path):
-            print "[ERROR] Your tmp path is not found !\n Please give your path manually."
-    else:
-        print "[ERROR] Your 'auth.log' is not found !\n Please give your log file manually."
-    os.chdir(Apc_Path)
-    tmp_cnt = 0
-    for file in os.listdir(Apc_Path):
-        if file.startswith("access") and file.endswith(".gz"):
-            os.system ("gzip -d " + Apc_Path + file)
-            if os.path.exists(Dsk_Path+"Apache2_IP_Blacklist.txt"):
-                os.system("cat " + Apc_Path + file[:12] + " | grep -E 'scan|script|prompt|bash|admin|root|command|manager|login|sql|db|database|myadmin|mysql|administrator|pma|PMA|setup' | grep -Eo '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}' >> " + Dsk_Path + "Apache2_IP_Blacklist.txt")
-                tmp_Logs[tmp_cnt] = file
-            else:
-                os.system("cat " + Apc_Path + file[:12] + " | grep -E 'scan|script|prompt|bash|admin|root|command|manager|login|sql|db|database|myadmin|mysql|administrator|pma|PMA|setup' | grep -Eo '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}' > " + Dsk_Path + "Apache2_IP_Blacklist.txt")
-                tmp_Logs[tmp_cnt] = file
-            tmp_cnt += 1
-    file = open(Dsk_Path + "Apache2_IP_Blacklist.txt", "r+")
-    for word in file.read().split():
-        if word not in wordcount:
-            wordcount[word] = 1
-        else:
-            wordcount[word] += 1
-    header = "Virtual Ubuntu WEB Attacks"
-    tmp_cnt = 0
-    for k,v in wordcount.items():
-        if str(k) != Web_IP:
-            duplicate = iptables(str(k))
-            if duplicate == False:
-                os.system("iptables -A INPUT -s " + str(k) + " -j DROP")
-                mail_func(k,tmp_Logs[tmp_cnt],header,"apache")
-                tmp_cnt += 1
-    os.system("rm -rf " + Dsk_Path + "Apache2_IP_Blacklist.txt")
-    try:
-        os.system("iptables-save")
-    except:
-        pass
-    os.system("rm -rf " + Dsk_Path + "iptables.txt")
-    os.system("gzip /var/log/apache2/access.log.*")
-    os.system("gzip -d /var/log/apache2/access.log.1")
-
-def iptables(ip):
-    dup = False
-    os.system("iptables -S > " + Dsk_Path +"iptables.txt")
-    ip_file = open( Dsk_Path + "iptables.txt", "r+")
-    rule = "-A INPUT -s " + ip
-    for line in ip_file:
-        if rule in line:
-            dup = True
-    return dup
+    create_black_lists()
+    auth_log()
+    apache_log()
+    os.system('iptables-save')
 
 if __name__ == "__main__":
-    if euid != 0:
-        print "[ERROR]You should have root permissions to run this program ! "
-    else:
-        main()
+    main()
