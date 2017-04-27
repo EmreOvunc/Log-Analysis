@@ -6,6 +6,7 @@ import os
 # General Paths & Variables
 webIP = 'YOUR WEB SERVER IP'
 logPath = '/var/log/'
+tmpIptables = '/tmp/tmp_iptables.txt'
 
 # Auth Statics
 auth = 'auth'
@@ -27,16 +28,41 @@ tmpApache = "/tmp/tmp_apacheList.txt"
 # Mail Statics
 apache_header = 'Virtual Ubuntu WEB Attacks'
 auth_header = 'Virtual Ubuntu SSH Attempts'
-receiver_mail = " info@emreovunc.com"
+receiver_mail = " YOUR MAIL ADDRESS"
 
 def create_black_lists():
+    if os.path.exists(tmpApache):
+        os.system('rm -rf ' + tmpApache)
+    if os.path.exists(tmpAuth):
+        os.system('rm -rf ' + tmpAuth)
     if not os.path.exists(blacklist_Apache):
         os.system('touch ' + blacklist_Apache)
     if not os.path.exists(blacklist_Auth):
         os.system('touch ' + blacklist_Auth)
 
 def add_iptables(IP):
-    os.system('iptables -A INPUT -s ' + IP + " -j DROP")
+    if "\n" in IP:
+        IP = IP.strip()
+    command = 'iptables -A INPUT -s ' + str(IP) + ' -j DROP'
+    os.system(command)
+
+def check_other_IPs():
+    os.system("iptables -S > " + tmpIptables)
+    iptablesFile = open(tmpIptables, 'r+')
+    iptablesLines = iptablesFile.readlines()
+    authFile = open(blacklist_Auth, 'r+')
+    apacheFile = open(blacklist_Apache, 'r+')
+    for rules in iptablesLines:
+        for IPs in authFile:
+            if not IPs == '\n':
+                rule = '-A INPUT -s ' + str(IPs)
+                if rule not in rules:
+                    add_iptables(str(IPs))
+        for IPss in apacheFile:
+            if not IPss == '\n':
+                rule = '-A INPUT -s ' + str(IPss)
+                if rule not in rules:
+                    add_iptables(str(IPss))
 
 def add_black_lists(typeLog, IP):
     if typeLog == auth:
@@ -119,6 +145,7 @@ def main():
     create_black_lists()
     auth_log()
     apache_log()
+    check_other_IPs()
     os.system('iptables-save')
 
 if __name__ == "__main__":
