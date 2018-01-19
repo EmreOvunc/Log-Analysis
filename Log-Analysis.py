@@ -182,22 +182,18 @@ def vsftp_log():
 
 def main():
     create_black_lists()
-
     try:
         auth_log()
     except:
         pass
-
     try:
         apache_log()
     except:
         pass
-
     try:
         vsftp_log()
     except:
         pass
-
     os.system('iptables-save')
 
 
